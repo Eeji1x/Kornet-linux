@@ -1,6 +1,7 @@
 <div align="center">
   
 # bubbablox installer for linux
+## yeah nvm bubbablox has shut down 💔
 </div>
 
 <img src="/ss.png">
