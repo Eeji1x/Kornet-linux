@@ -3,7 +3,6 @@ set -e
 
 ############################################
 # Kornet Linux Installer
-# Inspired by vyteshark/bbblox-linux
 ############################################
 
 # -------- CONFIG --------
@@ -61,7 +60,7 @@ su - "$REAL_USER" -c \
    -o \"$INSTALLER_PATH\" \"$INSTALLER_URL\""
 
 ############################################
-# 5. VALIDATE DOWNLOAD (PE CHECK)
+# 5. VALIDATE DOWNLOAD (PE ONLY)
 ############################################
 if [[ ! -f "$INSTALLER_PATH" ]]; then
   echo "ERROR: Installer file missing."
@@ -117,7 +116,7 @@ su - "$REAL_USER" -c "mkdir -p \"$DESKTOP_DIR\""
 cat <<EOF > "$DESKTOP_FILE"
 [Desktop Entry]
 Name=$APP_NAME
-Exec=env WINEPREFIX=$WINEPREFIX wine "$INSTALL_PATH" %u
+Exec=env WINEPREFIX=$WINEPREFIX wine "$INSTALL_PATH"
 Type=Application
 Terminal=false
 Categories=Game;
@@ -130,11 +129,11 @@ su - "$REAL_USER" -c "update-desktop-database \"$DESKTOP_DIR\""
 ############################################
 # 9. CLEANUP
 ############################################
-echo "Cleaning up temporary files..."
+echo "Cleaning up..."
 rm -rf "$WINE_TEMP"
 
 echo "--------------------------------------------"
 echo "DONE! Kornet is installed."
-echo "Launch it from your app menu."
+echo "Launch it from your application menu."
 echo "--------------------------------------------"
 
