@@ -7,7 +7,7 @@ APP_NAME="Kornet linux Player"
 APP_COMMENT="https://kornet.lat//"
 APP_ID="bubbablox-player"
 APP_INSTALLER_EXE="BubbaBloxInstaller.exe"
-APP_INSTALL_SEARCH_DIR="AppData/Local/BubbaBlox"
+APP_INSTALL_SEARCH_DIR="AppData/Local/Kornet"
 MIN_WINE_VERSION_MAJOR=8
 
 # --- .NET installation parameters ---
