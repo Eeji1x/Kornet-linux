@@ -3,7 +3,7 @@ set -e
 
 # --- URLs, IDs, paths ---
 INSTALLER_URL="https://kornet.lat/korcdns/KornetLauncher.exe"
-APP_NAME="Kornet Linux Player"
+APP_NAME="Kornet Player"
 APP_COMMENT="https://kornet.lat/"
 APP_ID="kornet-player"
 APP_INSTALLER_EXE="KornetLauncher.exe"
@@ -37,8 +37,7 @@ else
   exit 1
 fi
 
-# --- Detect non-root users ---
-echo "Detecting users..."
+echo "Detecting non-root users..."
 USER_DIRS=(/home/*)
 declare -A found_users
 for dir in "${USER_DIRS[@]}"; do
@@ -55,16 +54,18 @@ done
 USER_LIST=("${!found_users[@]}")
 
 if [[ ${#USER_LIST[@]} -eq 0 ]]; then
-  echo "ERROR: No users found."
+  echo "ERROR: No suitable user directories found."
   exit 1
 elif [[ ${#USER_LIST[@]} -eq 1 ]]; then
   REAL_USER="${USER_LIST[0]}"
+  echo "Found single user: $REAL_USER"
 else
-  echo "Select user to install $APP_NAME for:"
+  echo "Multiple users found. Please choose the user to install $APP_NAME for:"
   mapfile -t sorted_users < <(printf "%s\n" "${USER_LIST[@]}" | sort)
   select chosen_user in "${sorted_users[@]}"; do
     if [[ -n "$chosen_user" ]]; then
       REAL_USER="$chosen_user"
+      echo "Selected user: $REAL_USER"
       break
     fi
   done
@@ -75,57 +76,85 @@ REAL_UID=$(id -u "$REAL_USER")
 REAL_GID=$(id -g "$REAL_USER")
 WINEPREFIX="$REAL_HOME/.wine"
 
-# Graphical environment variables
+echo "Capturing graphical environment..."
 SUDO_USER_ORIGINAL=$(logname 2>/dev/null || who am i | awk '{print $1}')
-ENV_VARS="DISPLAY=\"$DISPLAY\" XDG_RUNTIME_DIR=\"$XDG_RUNTIME_DIR\""
+if [[ -z "$SUDO_USER_ORIGINAL" ]]; then
+    SUDO_USER_ORIGINAL="$REAL_USER"
+fi
+
+ENV_VARS="DISPLAY=\"$DISPLAY\" XDG_RUNTIME_DIR=\"$XDG_RUNTIME_DIR\" WAYLAND_DISPLAY=\"$WAYLAND_DISPLAY\""
+
+if [[ -n "$DISPLAY" ]] && [[ "$SUDO_USER_ORIGINAL" == "$REAL_USER" ]]; then
+    XAUTH_FILE=""
+    if [[ -n "$XAUTHORITY" ]] && [[ -f "$XAUTHORITY" ]]; then
+        XAUTH_FILE="$XAUTHORITY"
+    elif [[ -f "$REAL_HOME/.Xauthority" ]]; then
+        XAUTH_FILE="$REAL_HOME/.Xauthority"
+    fi
+
+    if [[ -n "$XAUTH_FILE" ]]; then
+        ENV_VARS+=" XAUTHORITY=\"$XAUTH_FILE\""
+    fi
+fi
 
 execute_as_user() {
   su - "$REAL_USER" -c "export $ENV_VARS; WINEPREFIX=\"$WINEPREFIX\" WINEARCH=win64 $1"
 }
 
-# --- Install Wine ---
-if ! command -v wine &>/dev/null; then
+# --- Wine Check ---
+WINE_EXE=$(command -v wine || true)
+if [[ -z "$WINE_EXE" ]]; then
   echo "Installing Wine..."
   if command -v apt &>/dev/null; then
     apt update && apt install -y wine winetricks
   elif command -v dnf &>/dev/null; then
     dnf install -y wine winetricks
+  elif command -v pacman &>/dev/null; then
+    pacman -Syu --noconfirm wine winetricks
   fi
 fi
 
 echo "Preparing Wine prefix..."
 execute_as_user "wineboot -u"
 
-# --- .NET 8.0 Check ---
-DOTNET_DIR="$WINEPREFIX/drive_c/users/$REAL_USER/AppData/Local/Microsoft/dotnet/host/fxr/$REQUIRED_DOTNET_VERSION.0"
+# --- .NET Runtime Check ---
+DOTNET_DIR="$WINEPREFIX/drive_c/users/$REAL_USER/AppData/Local/Microsoft/dotnet/host/fxr/$REQUIRED_DOTNET_VERSION.0" 
+
 if [[ ! -d "$DOTNET_DIR" ]]; then
-    echo "Installing .NET $REQUIRED_DOTNET_VERSION..."
-    su - "$REAL_USER" -c "$DOWNLOAD_TOOL $DOWNLOAD_ARGS \"$REAL_HOME/Downloads/$DOTNET_INSTALLER_NAME\" \"$DOTNET_INSTALLER_URL\""
-    execute_as_user "wine \"$REAL_HOME/Downloads/$DOTNET_INSTALLER_NAME\" /quiet /norestart || true"
-    su - "$REAL_USER" -c "rm -f \"$REAL_HOME/Downloads/$DOTNET_INSTALLER_NAME\""
+  echo "Required .NET $REQUIRED_DOTNET_VERSION runtime is missing."
+  echo "Downloading .NET installer..."
+  su - "$REAL_USER" -c "$DOWNLOAD_TOOL $DOWNLOAD_ARGS \"$REAL_HOME/Downloads/$DOTNET_INSTALLER_NAME\" \"$DOTNET_INSTALLER_URL\""
+  echo "Running .NET installer (GUI)..."
+  execute_as_user "wine \"$REAL_HOME/Downloads/$DOTNET_INSTALLER_NAME\" || true"
+  su - "$REAL_USER" -c "rm -f \"$REAL_HOME/Downloads/$DOTNET_INSTALLER_NAME\""
+else
+  echo ".NET $REQUIRED_DOTNET_VERSION already installed."
 fi
 
 # --- Kornet Installation ---
-echo "Downloading Kornet Installer..."
+echo "Downloading $APP_NAME installer..."
 su - "$REAL_USER" -c "$DOWNLOAD_TOOL $DOWNLOAD_ARGS \"$REAL_HOME/Downloads/$APP_INSTALLER_EXE\" \"$INSTALLER_URL\""
 
-echo "Running Kornet Installer..."
+echo "Running $APP_NAME installer..."
 execute_as_user "wine \"$REAL_HOME/Downloads/$APP_INSTALLER_EXE\" || true"
 
-echo "Locating executable..."
-sleep 5
-INSTALL_PATH=$(find "$WINEPREFIX/drive_c/users/$REAL_USER/$APP_INSTALL_SEARCH_DIR" -type f -iname "*.exe" 2>/dev/null | head -n 1)
+echo "Waiting for installation to finish..."
+sleep 8
+
+echo "Searching for Kornet executable..."
+# Aggressive search for the exe
+INSTALL_PATH=$(find "$WINEPREFIX/drive_c/users/$REAL_USER/" -type f -name "Kornet*.exe" 2>/dev/null | head -n 1)
 
 if [[ -z "$INSTALL_PATH" ]]; then
-  echo "ERROR: Executable not found in $APP_INSTALL_SEARCH_DIR."
+  echo "ERROR: Could not find Kornet executable in Wine drive."
   exit 1
 fi
 
-# --- Desktop file and Protocol ---
+# --- Desktop Entry and Protocol Handling ---
 DESKTOP_DIR="$REAL_HOME/.local/share/applications"
 mkdir -p "$DESKTOP_DIR"
 
-echo "Creating Desktop Entry for kornet-player://..."
+echo "Creating desktop entry for $APP_ID://..."
 cat <<EOF > "$DESKTOP_DIR/$APP_ID.desktop"
 [Desktop Entry]
 Name=$APP_NAME
@@ -138,6 +167,7 @@ MimeType=x-scheme-handler/$APP_ID;
 EOF
 chown "$REAL_USER:$REAL_GID" "$DESKTOP_DIR/$APP_ID.desktop"
 
+echo "Registering protocol handler..."
 execute_as_user "update-desktop-database $DESKTOP_DIR || true"
 execute_as_user "xdg-mime default $APP_ID.desktop x-scheme-handler/$APP_ID || true"
 
@@ -145,6 +175,6 @@ execute_as_user "xdg-mime default $APP_ID.desktop x-scheme-handler/$APP_ID || tr
 rm -f "$REAL_HOME/Downloads/$APP_INSTALLER_EXE"
 
 echo "------------------------------------------------"
-echo "$APP_NAME installed successfully!"
-echo "Protocol: $APP_ID://"
+echo "$APP_NAME installation completed successfully."
+echo "Website Protocol: $APP_ID://"
 echo "------------------------------------------------"
