@@ -6,9 +6,6 @@ INSTALLER_URL="https://kornet.lat/korcdns/KornetLauncher.exe"
 APP_NAME="Kornet Linux Player"
 APP_ID="kornet-player"
 APP_INSTALLER_NAME="KornetLauncher.exe"
-REQUIRED_DOTNET_VERSION="8.0"
-DOTNET_INSTALLER_URL="https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe"
-DOTNET_INSTALLER_NAME="windowsdesktop-runtime-win-x64.exe"
 
 # 1. ROOT CHECK
 if [[ $EUID -ne 0 ]]; then
@@ -22,54 +19,36 @@ REAL_HOME=$(eval echo ~$REAL_USER)
 REAL_GID=$(id -g "$REAL_USER")
 WINEPREFIX="$REAL_HOME/.wine"
 
-echo "Installing for user: $REAL_USER"
-echo "Home directory: $REAL_HOME"
-
-# 3. CREATE TEMP WORKING DIRECTORY
-# This avoids "File not found" errors by using a simple path
-TMP_DIR="/tmp/kornet_install"
-mkdir -p "$TMP_DIR"
-chown "$REAL_USER:$REAL_GID" "$TMP_DIR"
-
-# 4. ENVIRONMENT SETUP
-ENV_VARS="DISPLAY=\"$DISPLAY\" XDG_RUNTIME_DIR=\"/run/user/$(id -u "$REAL_USER")\""
-execute_as_user() {
-  su - "$REAL_USER" -c "export $ENV_VARS; WINEPREFIX=\"$WINEPREFIX\" WINEARCH=win64 $1"
-}
-
-# 5. INSTALL WINE & CURL
-if ! command -v wine &>/dev/null || ! command -v curl &>/dev/null; then
-  echo "Installing system dependencies..."
-  apt update && apt install -y wine wine64 curl
+# 3. ENSURE WINE DRIVE EXISTS
+if [[ ! -d "$WINEPREFIX/drive_c" ]]; then
+    echo "Initializing Wine prefix..."
+    su - "$REAL_USER" -c "WINEPREFIX=\"$WINEPREFIX\" WINEARCH=win64 wineboot -u"
 fi
 
-# 6. .NET INSTALLATION
-DOTNET_DIR="$WINEPREFIX/drive_c/users/$REAL_USER/AppData/Local/Microsoft/dotnet/host/fxr/$REQUIRED_DOTNET_VERSION.0"
-if [[ ! -d "$DOTNET_DIR" ]]; then
-    echo "Downloading .NET..."
-    su - "$REAL_USER" -c "curl -L -o \"$TMP_DIR/$DOTNET_INSTALLER_NAME\" \"$DOTNET_INSTALLER_URL\""
-    echo "Launching .NET Installer..."
-    execute_as_user "wine \"$TMP_DIR/$DOTNET_INSTALLER_NAME\""
-fi
+# 4. DOWNLOAD DIRECTLY INTO WINE'S C: DRIVE
+# This prevents the "Tiedostoa ei löydy" error
+WINE_TEMP="$WINEPREFIX/drive_c/temp"
+su - "$REAL_USER" -c "mkdir -p \"$WINE_TEMP\""
 
-# 7. KORNET INSTALLATION
-echo "Downloading Kornet..."
-su - "$REAL_USER" -c "curl -L -o \"$TMP_DIR/$APP_INSTALLER_NAME\" \"$INSTALLER_URL\""
+echo "Downloading installer to Wine C: drive..."
+su - "$REAL_USER" -c "curl -L -o \"$WINE_TEMP/$APP_INSTALLER_NAME\" \"$INSTALLER_URL\""
 
+# 5. EXECUTE USING WINDOWS PATH
 echo "Launching Kornet Installer..."
-# We use the full absolute path to the TMP folder so Wine can't miss it
-execute_as_user "wine \"$TMP_DIR/$APP_INSTALLER_NAME\""
+# We tell Wine to run it from C:\temp\ which it always understands
+su - "$REAL_USER" -c "WINEPREFIX=\"$WINEPREFIX\" wine \"C:\\temp\\$APP_INSTALLER_NAME\""
 
-echo "Scanning for installed Kornet..."
+# 6. SCAN FOR INSTALLED EXE
+echo "Searching for Kornet..."
 sleep 5
 INSTALL_PATH=$(find "$WINEPREFIX/drive_c/users/$REAL_USER/" -type f -name "*Kornet*.exe" 2>/dev/null | head -n 1)
 
 if [[ -z "$INSTALL_PATH" ]]; then
-  echo "ERROR: Installer finished but Kornet.exe was not found in Wine drive."
+  echo "ERROR: Could not find Kornet.exe. Did you finish the install window?"
   exit 1
 fi
 
-# 8. PROTOCOL REGISTRATION
+# 7. PROTOCOL REGISTRATION
 DESKTOP_DIR="$REAL_HOME/.local/share/applications"
 su - "$REAL_USER" -c "mkdir -p \"$DESKTOP_DIR\""
 
@@ -83,13 +62,12 @@ MimeType=x-scheme-handler/$APP_ID;
 EOF
 chown "$REAL_USER:$REAL_GID" "$DESKTOP_DIR/$APP_ID.desktop"
 
-execute_as_user "update-desktop-database \"$DESKTOP_DIR\""
-execute_as_user "xdg-mime default \"$APP_ID.desktop\" x-scheme-handler/$APP_ID"
+su - "$REAL_USER" -c "update-desktop-database \"$DESKTOP_DIR\""
+su - "$REAL_USER" -c "xdg-mime default \"$APP_ID.desktop\" x-scheme-handler/$APP_ID"
 
-# 9. CLEANUP
-rm -rf "$TMP_DIR"
+# 8. CLEANUP
+rm -rf "$WINE_TEMP"
 
 echo "------------------------------------------------"
-echo "SUCCESS! Kornet is ready."
-echo "You can now join games from kornet.lat"
+echo "DONE! Kornet is installed."
 echo "------------------------------------------------"
