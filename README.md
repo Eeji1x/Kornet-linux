@@ -1,12 +1,13 @@
 <div align="center">
   
 # Kornet Linux Client
-#This Is Forked From The Bubbablox linux Client 
+# This Is Forked From The Bubbablox linux Client 
+# Also This Can Be Buggy But Il Fix The Bugs 
 
 <img src="/ss.png">
 
 ## installation:
-1. run the script as root - ```sudo bash bbblox-linux.sh```
+1. run the script as root - ```sudo bash Kornet-linux.sh```
 2. watch it do everything for you
 3. done you can now join a game with the website
 
