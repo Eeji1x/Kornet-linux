@@ -2,7 +2,8 @@
 set -e
 
 ############################################
-# Kornet Linux Installer
+# Kornet Linux Installer (Full Rescripted)
+# Works with Wine, Wayland/X11, and Kornet Launcher
 ############################################
 
 # -------- CONFIG --------
@@ -29,7 +30,7 @@ REAL_HOME=$(eval echo "~$REAL_USER")
 REAL_GID=$(id -g "$REAL_USER")
 
 echo "Detecting user..."
-echo "Using user: $REAL_USER"
+echo "User: $REAL_USER"
 echo "Home directory: $REAL_HOME"
 
 ############################################
@@ -79,14 +80,28 @@ echo "Installer verified:"
 echo "$FILE_TYPE"
 
 ############################################
-# 6. RUN INSTALLER
+# 6. ENSURE WINE MONO
+############################################
+echo "Checking Wine Mono..."
+WINE_MONO="$WINEPREFIX/drive_c/windows/mono"
+if [[ ! -d "$WINE_MONO" ]]; then
+  echo "Wine Mono missing. Installing..."
+  su - "$REAL_USER" -c \
+    "wget -O /tmp/wine-mono.msi https://dl.winehq.org/wine/wine-mono/10.4.1/wine-mono-10.4.1-x86.msi && \
+     WINEPREFIX=\"$WINEPREFIX\" wine msiexec /i /tmp/wine-mono.msi /quiet && \
+     rm /tmp/wine-mono.msi"
+fi
+
+############################################
+# 7. RUN INSTALLER
 ############################################
 echo "Launching Kornet launcher..."
 su - "$REAL_USER" -c \
-  "WINEPREFIX=\"$WINEPREFIX\" wine \"C:\\\\temp\\\\$INSTALLER_NAME\""
+  "export XDG_RUNTIME_DIR=/run/user/$(id -u "$REAL_USER"); \
+   WINEPREFIX=\"$WINEPREFIX\" wine \"C:\\\\temp\\\\$INSTALLER_NAME\""
 
 ############################################
-# 7. FIND INSTALLED KORNET EXE
+# 8. FIND INSTALLED KORNET EXE
 ############################################
 echo "Searching for Kornet executable..."
 sleep 5
@@ -105,7 +120,7 @@ echo "Found Kornet executable:"
 echo "$INSTALL_PATH"
 
 ############################################
-# 8. DESKTOP ENTRY
+# 9. DESKTOP ENTRY
 ############################################
 DESKTOP_DIR="$REAL_HOME/.local/share/applications"
 DESKTOP_FILE="$DESKTOP_DIR/$APP_ID.desktop"
@@ -127,13 +142,13 @@ chown "$REAL_USER:$REAL_GID" "$DESKTOP_FILE"
 su - "$REAL_USER" -c "update-desktop-database \"$DESKTOP_DIR\""
 
 ############################################
-# 9. CLEANUP
+# 10. CLEANUP
 ############################################
-echo "Cleaning up..."
+echo "Cleaning up temporary files..."
 rm -rf "$WINE_TEMP"
 
 echo "--------------------------------------------"
 echo "DONE! Kornet is installed."
-echo "Launch it from your application menu."
+echo "Launch it from your app menu."
 echo "--------------------------------------------"
 
