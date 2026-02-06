@@ -1,8 +1,7 @@
 <div align="center">
   
-# bubbablox installer for linux
-## yeah nvm bubbablox has shut down 💔
-</div>
+# Kornet Linux Client
+#This Is Forked From The Bubbablox linux Client 
 
 <img src="/ss.png">
 
