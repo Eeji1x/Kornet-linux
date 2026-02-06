@@ -7,8 +7,8 @@
 <img src="/ss.png">
 
 ## installation:
-1. run the script as root - ```sudo bash Kornet-linux.sh```
-2. watch it do everything for you
+1. first cd to the where is the Kornet-linux.sh then run the commands and then it will install - ```sudo bash Kornet-linux.sh```
+2. wait and just watch
 3. done you can now join a game with the website
 
 ## FAQ:
