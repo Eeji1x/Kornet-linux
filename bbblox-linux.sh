@@ -3,7 +3,7 @@ set -e
 
 # --- URLs, IDs, paths ---
 INSTALLER_URL="https://bt.zawg.ca/BubbaBloxInstaller.exe"
-APP_NAME="BubbaBlox Player"
+APP_NAME="Kornet linux Player"
 APP_COMMENT="https://bbblox.org/"
 APP_ID="bubbablox-player"
 APP_INSTALLER_EXE="BubbaBloxInstaller.exe"
